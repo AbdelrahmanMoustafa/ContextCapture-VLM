@@ -10,24 +10,20 @@ from PIL import Image, PngImagePlugin
 import torch
 from transformers import AutoProcessor, Florence2ForConditionalGeneration
 
-# --- CONFIGURATION ---
 SCREENSHOT_DIR = str(Path.home() / "Pictures" / "Screenshots")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_ID = "florence-community/Florence-2-base-ft"
 
-# --- INITIALIZE VLM MODEL ---
 print(f"[*] Loading native VLM model '{MODEL_ID}' on {DEVICE}...")
 processor = AutoProcessor.from_pretrained(MODEL_ID)
 model = Florence2ForConditionalGeneration.from_pretrained(MODEL_ID).to(DEVICE)
 print("[*] VLM model loaded and ready.")
 
 def clean_filename(text: str) -> str:
-    """Standardizes a string into a clean filename."""
     if not text or text == "Unknown_App": return "screenshot"
     
     cleaned = text.lower()
     
-    # Nuke chatty VLM prefixes so general descriptions sound like filenames
     fluff_phrases = [
         "a computer screen showing a ", "a computer screen showing ",
         "a screen shot of a ", "a screen shot of ",
@@ -42,23 +38,19 @@ def clean_filename(text: str) -> str:
     for fluff in fluff_phrases:
         cleaned = cleaned.replace(fluff, "")
         
-    # Remove browser names from window titles to make them extra clean
     for suffix in [" - youtube", " - google chrome", " - microsoft edge", " - mozilla firefox", " - brave"]:
         cleaned = cleaned.replace(suffix, "")
         
     cleaned = cleaned.replace(' ', '_').replace('-', '_')
-    # Strip forbidden characters AND periods/brackets
     cleaned = re.sub(r'[\\/*?:"<>|.\'\[\]\(\)]', "", cleaned)
     cleaned = re.sub(r'_+', '_', cleaned).strip('_')
     
     return cleaned[:60]
 
 def get_smart_description(image_path: str, window_title: str):
-    """Uses CAPTION for all images, routes Media to Window Titles and Visuals to VLM."""
     try:
         image = Image.open(image_path).convert("RGB")
         
-        # Switch back to CAPTION so it can identify normal pictures like your gaming desk
         task_prompt = "<CAPTION>"
         
         inputs = processor(text=task_prompt, images=image, return_tensors="pt").to(DEVICE)
@@ -78,8 +70,6 @@ def get_smart_description(image_path: str, window_title: str):
         
         cleaned_ai = clean_filename(ai_output)
         
-        # --- THE MAGIC MEDIA ROUTER ---
-        # If the AI describes looking at a piece of media or UI, the Window Title is always better.
         media_trigger_words = {
             "song", "track", "album", "music", "spotify", "youtube", 
             "video", "movie", "poem", "website", "webpage", "player", 
